@@ -42,7 +42,6 @@ object Controller {
 
     /** Print [lines], [createdAt], and [id]. */
     private fun print(lines: List<PrintLine>, createdAt: Long, id: String) {
-        LOGGER.info("Attempting to print...")
 
         try {
             val printerOutputStream = PrinterOutputStream(PRINT_SERVICE)
@@ -144,7 +143,7 @@ object Controller {
             LOGGER.error("There was an issue attempting to print.", ex)
         }
 
-        LOGGER.info("Print successful.")
+        LOGGER.info("Print successful: $id")
     }
 
     /** Mute MongoDB and start. */
@@ -155,5 +154,7 @@ object Controller {
         rootLogger.level = Level.OFF
 
         runBlocking { Socket.connectHook() }
+
+        while(true){}
     }
 }

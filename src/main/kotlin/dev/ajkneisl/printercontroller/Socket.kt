@@ -18,6 +18,12 @@ import org.slf4j.LoggerFactory
 object Socket {
     private val LOGGER: Logger = LoggerFactory.getLogger(this.javaClass)
 
+    /** The ID of the printer. */
+    val PRINTER_ID: String by lazy { System.getenv("PRINTER_ID") }
+
+    /** The token of the printer. */
+    val PRINTER_TOKEN: String by lazy { System.getenv("PRINTER_TOKEN") }
+
     /** If the [CLIENT] is currently connected. */
     var IS_CONNECTED: Boolean = false
 
@@ -27,12 +33,16 @@ object Socket {
     /** Client to interact with printer-backend. */
     private val CLIENT =
         HttpClient(CIO) {
-            install(WebSockets) { contentConverter = KotlinxWebsocketSerializationConverter(Json) }
+            install(WebSockets) {
+                contentConverter = KotlinxWebsocketSerializationConverter(Json)
+                maxFrameSize = Long.MAX_VALUE
+                pingInterval = 15000
+            }
         }
 
     /** Hook to the socket. */
     private suspend fun hookSocket() {
-        CLIENT.webSocket(host = "localhost", port = 8010, path = "/watch") {
+        val func: suspend DefaultClientWebSocketSession.() -> Unit = {
             LOGGER.info("Successfully connected to socket.")
             RETRY_ATTEMPTS = 0
 
@@ -53,8 +63,15 @@ object Socket {
                             is PrintRequest -> {
                                 Controller.print(incoming.payload)
                             }
+                            is LargePrintRequest -> {
+                                incoming.payload.forEach { pay ->
+                                    Controller.print(pay)
+                                }
+                            }
                             is RequestAuthentication ->
-                                sendSerialized(Authenticate("abc", "PRINTER-1") as SocketMessage)
+                                sendSerialized(
+                                    Authenticate(PRINTER_TOKEN, PRINTER_ID) as SocketMessage
+                                )
                             else -> LOGGER.error("Invalid request.")
                         }
                     }
@@ -66,6 +83,12 @@ object Socket {
                     }
                 }
             }
+        }
+
+        if (Controller.PRODUCTION) {
+            CLIENT.wss(host = "ajkneisl.dev", port = 443, path = "/printer/watch", block = func)
+        } else {
+            CLIENT.ws(host = "localhost", port = 8010, path = "/watch", block = func)
         }
     }
 
