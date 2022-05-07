@@ -155,6 +155,6 @@ object Controller {
 
         runBlocking { Socket.connectHook() }
 
-        while(true){}
+        while (true) {}
     }
 }

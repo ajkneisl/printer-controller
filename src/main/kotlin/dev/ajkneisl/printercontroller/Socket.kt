@@ -4,11 +4,9 @@ import dev.ajkneisl.printerlib.*
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.websocket.*
-import io.ktor.network.sockets.*
 import io.ktor.serialization.*
 import io.ktor.serialization.kotlinx.*
 import io.ktor.websocket.*
-import java.util.*
 import kotlin.system.exitProcess
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
@@ -44,6 +42,7 @@ object Socket {
     private suspend fun hookSocket() {
         val func: suspend DefaultClientWebSocketSession.() -> Unit = {
             LOGGER.info("Successfully connected to socket.")
+            socketNotification("SUCCESS", "Connected to socket.")
             RETRY_ATTEMPTS = 0
 
             for (frame in incoming) {
@@ -64,9 +63,7 @@ object Socket {
                                 Controller.print(incoming.payload)
                             }
                             is LargePrintRequest -> {
-                                incoming.payload.forEach { pay ->
-                                    Controller.print(pay)
-                                }
+                                incoming.payload.forEach { pay -> Controller.print(pay) }
                             }
                             is RequestAuthentication ->
                                 sendSerialized(
@@ -86,7 +83,7 @@ object Socket {
         }
 
         if (Controller.PRODUCTION) {
-            CLIENT.wss(host = "ajkneisl.dev", port = 443, path = "/printer/watch", block = func)
+            CLIENT.wss(host = "api.ajkneisl.dev", port = 443, path = "/printer/watch", block = func)
         } else {
             CLIENT.ws(host = "localhost", port = 8010, path = "/watch", block = func)
         }
@@ -101,39 +98,33 @@ object Socket {
         } catch (ex: Exception) {
             IS_CONNECTED = false
             LOGGER.error("FATAL: The socket has disconnected.")
-            retryHook()
+            socketNotification("ERROR", "Socket has disconnected.")
+
+            if (RETRY_ATTEMPTS > 10) {
+                LOGGER.error("FATAL: Retry attempts exceeded 10, giving up.")
+                socketNotification("FATAL", "Failed to connect to websocket after 10 attempts.")
+                exitProcess(16)
+            }
+
+            LOGGER.info("Retrying connection to hook in five seconds.")
+
+            delay(5000)
+
+            LOGGER.info("Retrying connection to hook... ($RETRY_ATTEMPTS)")
+            connectHook()
         }
-    }
-
-    /** Retry connecting to webhook. Give up after 10 failed attempts. */
-    private suspend fun retryHook() {
-        if (RETRY_ATTEMPTS > 10) {
-            LOGGER.error("FATAL: Retry attempts exceeded 10, giving up.")
-            quitNotification()
-            exitProcess(16)
-        }
-
-        LOGGER.info("Retrying connection to hook in five seconds.")
-
-        delay(5000)
-
-        LOGGER.info("Retrying connection to hook... ($RETRY_ATTEMPTS)")
-        connectHook()
     }
 
     /** The notification when giving up connecting. */
-    private fun quitNotification() {
+    private fun socketNotification(type: String, message: String) {
         Controller.print(
             Print(
-                "FATAL-DISCON",
+                "socket",
                 System.currentTimeMillis(),
                 listOf(
-                    PrintText(PrintDefaults.TITLE, 0, "FATAL ERROR"),
-                    PrintText(
-                        PrintDefaults.DEFAULT,
-                        0,
-                        "There was an issue connecting to the information socket! :("
-                    )
+                    PrintText(PrintDefaults.TITLE, 0, "Socket Notification"),
+                    PrintText(PrintDefaults.SUB_TITLE, 0, type),
+                    PrintText(PrintDefaults.DEFAULT, 0, message)
                 )
             )
         )
