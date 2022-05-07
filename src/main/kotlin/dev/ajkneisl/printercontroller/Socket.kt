@@ -83,7 +83,7 @@ object Socket {
         }
 
         if (Controller.PRODUCTION) {
-            CLIENT.wss(host = "api.ajkneisl.dev", port = 443, path = "/printer/watch", block = func)
+            CLIENT.wss(host = "ajkn.us", port = 443, path = "/printer/watch", block = func)
         } else {
             CLIENT.ws(host = "localhost", port = 8010, path = "/watch", block = func)
         }
