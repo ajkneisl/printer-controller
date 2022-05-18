@@ -17,7 +17,11 @@ import java.time.Instant
 import java.util.*
 import javax.imageio.ImageIO
 import javax.print.PrintService
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import org.litote.kmongo.KMongo
+import org.litote.kmongo.eq
+import org.litote.kmongo.getCollection
 import org.slf4j.LoggerFactory
 
 object Controller {
@@ -42,7 +46,6 @@ object Controller {
 
     /** Print [lines], [createdAt], and [id]. */
     private fun print(lines: List<PrintLine>, createdAt: Long, id: String) {
-
         try {
             val printerOutputStream = PrinterOutputStream(PRINT_SERVICE)
             val escpos = EscPos(printerOutputStream)
@@ -148,13 +151,42 @@ object Controller {
 
     /** Mute MongoDB and start. */
     @JvmStatic
-    fun main(args: Array<String>) {
+    fun main(args: Array<String>) = runBlocking {
         val loggerContext: LoggerContext = LoggerFactory.getILoggerFactory() as LoggerContext
         val rootLogger: Logger = loggerContext.getLogger("org.mongodb.driver")
         rootLogger.level = Level.OFF
 
-        runBlocking { Socket.connectHook() }
+        val db =
+            KMongo.createClient(
+                "mongodb+srv://printerController:${System.getenv("MONGO_PW")}@ajknpr.hscnn.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"
+            )
 
-        while (true) {}
+        while (true) {
+            delay(15000)
+            val col = db.getDatabase("printer").getCollection<PrinterData>("queue")
+
+            LOGGER.debug("Performing MongoDB check")
+
+            val li = col.find().toList()
+
+            li.forEach { doc ->
+                LOGGER.debug("Found print!")
+
+                when (doc) {
+                    is PrintRequest -> {
+                        print(doc.payload)
+                        col.deleteOne(PrintRequest::payload eq doc.payload)
+                    }
+                    is LargePrintRequest -> {
+                        doc.payload.forEach(Controller::print)
+                        col.deleteOne(LargePrintRequest::payload eq doc.payload)
+                    }
+                }
+
+                db.getDatabase("printer")
+                    .getCollection<ArchivedPrintRequest>("archive")
+                    .insertOne(ArchivedPrintRequest(doc))
+            }
+        }
     }
 }
