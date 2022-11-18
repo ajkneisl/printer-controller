@@ -17,6 +17,10 @@ import java.time.Instant
 import java.util.*
 import javax.imageio.ImageIO
 import javax.print.PrintService
+import kotlin.system.exitProcess
+import kotlinx.cli.ArgParser
+import kotlinx.cli.ArgType
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.litote.kmongo.KMongo
@@ -27,15 +31,8 @@ import org.slf4j.LoggerFactory
 object Controller {
     private val LOGGER: org.slf4j.Logger = LoggerFactory.getLogger(this.javaClass)
 
-    /** Decides what name the printer is and what URL for the websocket. */
-    val PRODUCTION: Boolean by lazy { System.getenv("prod").toBoolean() }
-
     /** The printer. */
-    private val PRINT_SERVICE: PrintService by lazy {
-        val name = if (PRODUCTION) "CITIZEN_CT-S310" else "CT-S310"
-
-        PrinterOutputStream.getPrintServiceByName(name)
-    }
+    private lateinit var PRINT_SERVICE: PrintService
 
     private val CENTER_JUSTIFY: Style = Style().setJustification(EscPosConst.Justification.Center)
 
@@ -152,13 +149,51 @@ object Controller {
     /** Mute MongoDB and start. */
     @JvmStatic
     fun main(args: Array<String>) = runBlocking {
+        val parser = ArgParser("printer-controller")
+
+        val mongodb by parser.argument(ArgType.String, "mongodb", "MongoDB password")
+        val printer by parser.argument(ArgType.String, "printer", "Printer name")
+
+        val testPrint by
+            parser.option(
+                ArgType.Boolean,
+                fullName = "testPrint",
+                shortName = "testPrint",
+                description = "Attempt a print on connection."
+            )
+
+        parser.parse(args)
+
         val loggerContext: LoggerContext = LoggerFactory.getILoggerFactory() as LoggerContext
         val rootLogger: Logger = loggerContext.getLogger("org.mongodb.driver")
         rootLogger.level = Level.OFF
 
+        val printers = PrinterOutputStream.getListPrintServicesNames()
+        if (!printers.contains(printer)) {
+            LOGGER.error(
+                "FATAL, invalid printer: $printer (Valid Printers: ${printers.joinToString(", ")})"
+            )
+            exitProcess(-1)
+        }
+
+        PRINT_SERVICE = PrinterOutputStream.getPrintServiceByName(printer)
+
+        LOGGER.debug("Using printer: $printer")
+
+        if (testPrint == true) {
+            LOGGER.debug("Doing a test print")
+
+            EscPos(PrinterOutputStream(PRINT_SERVICE))
+                .writeLF("Test Print")
+                .feed(8)
+                .writeLF("Goodbye!")
+                .cut(EscPos.CutMode.FULL)
+                .close()
+        }
+
         val db =
             KMongo.createClient(
-                "mongodb+srv://printerController:${System.getenv("MONGO_PW")}@ajknpr.hscnn.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"
+                "mongodb+srv://printerController:${mongodb}@ajknpr.hscnn.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"
             )
 
         while (true) {

@@ -13,30 +13,36 @@ val ktor_version = "2.0.0"
 
 repositories {
     mavenCentral()
+
+    maven {
+        url = uri("https://maven.pkg.github.com/ajkneisl/printer-lib")
+
+        credentials {
+            username = "ajkneisl"
+            password = System.getenv("GHP_GITHUB")
+        }
+    }
 }
 
 dependencies {
     testImplementation(kotlin("test"))
 
-    implementation("io.ktor:ktor-client-websockets:$ktor_version")
-    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
-    implementation("io.ktor:ktor-client-core:$ktor_version")
-    implementation("io.ktor:ktor-client-cio:$ktor_version")
-
-    implementation(files("lib/printerlib-1.0.jar"))
-
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
-    testImplementation("org.junit.jupiter:junit-jupiter-api:5.8.2")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.8.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.9.0")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.9.0")
 
     implementation("com.github.anastaciocintra:escpos-coffee:4.1.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.2")
-    implementation("org.litote.kmongo:kmongo:4.5.1")
-    implementation("org.litote.kmongo:kmongo-serialization:4.5.1")
-    implementation("org.litote.kmongo:kmongo-coroutine:4.5.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1")
+    implementation("org.litote.kmongo:kmongo:4.7.2")
+    implementation("org.litote.kmongo:kmongo-serialization:4.7.2")
+    implementation("org.litote.kmongo:kmongo-coroutine:4.7.2")
 
-    implementation("org.apache.logging.log4j:log4j-core:2.17.2")
-    implementation("ch.qos.logback:logback-classic:1.2.11")
+    implementation("org.jetbrains.kotlinx:kotlinx-cli-jvm:0.3.5")
+
+    implementation("org.apache.logging.log4j:log4j-core:2.19.0")
+    implementation("ch.qos.logback:logback-classic:1.4.4")
+
+    implementation("dev.ajkneisl:printerlib:1.2.1")
 }
 
 tasks.test {
